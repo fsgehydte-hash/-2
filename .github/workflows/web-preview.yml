@@ -22,25 +22,15 @@ jobs:
           channel: 'stable'
 
       - name: Get Dependencies
-        run: |
-          if [ -d "rayhana/app" ]; then
-            cd rayhana/app
-          elif [ -d "app" ]; then
-            cd app
-          fi
-          flutter pub get
+        working-directory: rayhana/app
+        run: flutter pub get
 
       - name: Build Web
-        run: |
-          if [ -d "rayhana/app" ]; then
-            cd rayhana/app
-          elif [ -d "app" ]; then
-            cd app
-          fi
-          flutter build web --release
+        working-directory: rayhana/app
+        run: flutter build web --release
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
+          publish_dir: ./rayhana/app/build/web
