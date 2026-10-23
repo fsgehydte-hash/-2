@@ -1,0 +1,46 @@
+name: Web Preview
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Get Dependencies
+        run: |
+          if [ -d "rayhana/app" ]; then
+            cd rayhana/app
+          elif [ -d "app" ]; then
+            cd app
+          fi
+          flutter pub get
+
+      - name: Build Web
+        run: |
+          if [ -d "rayhana/app" ]; then
+            cd rayhana/app
+          elif [ -d "app" ]; then
+            cd app
+          fi
+          flutter build web --release
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
