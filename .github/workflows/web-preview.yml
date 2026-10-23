@@ -1,36 +1,144 @@
-name: Web Preview
+name: web-preview
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
+  push:
+    branches: [main, master]
 
 permissions:
   contents: write
 
+concurrency:
+  group: web-preview
+  cancel-in-progress: true
+
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Locate Flutter project (no hard-coded path)
+        run: |
+          set -euo pipefail
+          find_project() {
+            find . -name pubspec.yaml \
+              -not -path './.git/*' -not -path '*/.dart_tool/*' -not -path '*/build/*' \
+              -not -path '*/.symlinks/*' | sort | while IFS= read -r p; do
+              d="$(dirname "$p")"
+              if [ -f "$d/lib/main.dart" ]; then echo "$d"; break; fi
+            done
+          }
+          dir="$(find_project)"
+          # 1) a single zip uploaded to the repo
+          if [ -z "$dir" ]; then
+            z="$(ls ./*.zip 2>/dev/null | head -n 1 || true)"
+            if [ -n "$z" ]; then
+              echo "No project found; unpacking $z"
+              unzip -q -o "$z"
+              dir="$(find_project)"
+            fi
+          fi
+          # 2) files uploaded one by one (iPhone upload flattens folders): rebuild the folders by file name
+          if [ -z "$dir" ]; then
+            echo "No project found; trying to rebuild folders from flat files in the repo root"
+            mkdir -p flutter_app
+            missing=""
+            while read -r f d; do
+              [ -z "$f" ] && continue
+              if [ -f "./$f" ]; then
+                mkdir -p "flutter_app/$d"
+                cp "./$f" "flutter_app/$d/$f"
+              else
+                case "$f" in *_test.dart|analysis_options.yaml) ;; *) missing="$missing $f" ;; esac
+              fi
+            done <<'MAP'
+          analysis_options.yaml .
+          app.dart lib/app
+          auth_repository.dart lib/data
+          brand_logo.dart lib/widgets
+          config.dart lib/core
+          core_utils_test.dart test
+          dashboard_page.dart lib/features/dashboard
+          dashboard_repository.dart lib/data
+          demo_data.dart lib/data
+          demo_entries.dart lib/data
+          entries_models.dart lib/data
+          entries_page.dart lib/features/entries
+          entries_repository.dart lib/data
+          entries_repository_test.dart test
+          entry_actions.dart lib/features/entries
+          entry_form_page.dart lib/features/entries
+          format.dart lib/core
+          home_shell.dart lib/features/home
+          idgen.dart lib/core
+          iqd_input.dart lib/core
+          login_screen.dart lib/features/auth
+          main.dart lib
+          metric_card.dart lib/widgets
+          permissions.dart lib/core
+          permissions_test.dart test
+          placeholder_page.dart lib/features/home
+          providers.dart lib/app
+          pubspec.yaml .
+          settings.dart lib/core
+          settings_page.dart lib/features/settings
+          strings.dart lib/core
+          theme.dart lib/core
+          time_util.dart lib/core
+          users_page.dart lib/features/users
+          users_repository.dart lib/data
+          widget_test.dart test
+          MAP
+            if [ -n "$missing" ]; then
+              echo "::error::These required files are missing from the repo root:$missing"
+              exit 1
+            fi
+            dir="./flutter_app"
+          fi
+          if [ -z "$dir" ] || [ ! -f "$dir/lib/main.dart" ]; then
+            echo "::error::No Flutter project found. Repository layout:"
+            find . -maxdepth 4 -not -path './.git/*' | head -100
+            exit 1
+          fi
+          echo "Flutter project directory: $dir"
+          echo "APP_DIR=$dir" >> "$GITHUB_ENV"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
-          channel: 'stable'
+          channel: stable
+          cache: true
 
-      - name: Get Dependencies
-        working-directory: rayhana/app
-        run: flutter pub get
+      - name: Create web folder if missing
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          if [ ! -d web ]; then
+            name="$(grep -m1 '^name:' pubspec.yaml | awk '{print $2}')"
+            flutter create --platforms=web --project-name "$name" .
+          fi
 
-      - name: Build Web
-        working-directory: rayhana/app
-        run: flutter build web --release
+      - name: flutter pub get
+        run: cd "$APP_DIR" && flutter pub get
 
-      - name: Deploy to GitHub Pages
+      - name: flutter build web --release (demo data only)
+        run: |
+          cd "$APP_DIR"
+          flutter build web --release \
+            --base-href "/${{ github.event.repository.name }}/" \
+            --dart-define=DEMO=true \
+            --dart-define=ALLOW_DEMO_IN_RELEASE=true
+
+      - name: Verify build output
+        run: |
+          set -euo pipefail
+          ls -la "$APP_DIR/build/web"
+          test -f "$APP_DIR/build/web/index.html"
+
+      - name: Deploy to GitHub Pages (gh-pages branch)
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./rayhana/app/build/web
+          publish_dir: ${{ env.APP_DIR }}/build/web
