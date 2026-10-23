@@ -1,0 +1,20 @@
+# المرحلة 2: الاعتماديات المستخدمة فعلياً فقط. لم يُشغَّل `flutter pub get` هنا (Flutter غير متوفر).
+# اعتماديات المراحل اللاحقة (drift, sqlcipher, flutter_secure_storage, fl_chart, pdf, excel, connectivity_plus, uuid) تُضاف عند الحاجة.
+name: rayhana_app
+description: ريحانة للتسوق المنزلي — نظام إدارة الإيرادات والمصروفات
+publish_to: none
+version: 0.2.0+1
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+dependencies:
+  flutter: {sdk: flutter}
+  flutter_localizations: {sdk: flutter}
+  intl: any
+  flutter_riverpod: ^2.5.1
+  supabase_flutter: ^2.5.0
+  shared_preferences: ^2.2.3   # حفظ معرّف الجهاز المحلي
+dev_dependencies:
+  flutter_test: {sdk: flutter}
+  flutter_lints: ^4.0.0
+flutter:
+  uses-material-design: true

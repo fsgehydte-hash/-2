@@ -1,0 +1,7 @@
+# إعدادات تطوير محلية (Supabase CLI). لم تُشغَّل في هذه البيئة.
+project_id = "rayhana"
+[db]
+major_version = 15
+[auth]
+enable_signup = false        # المالك فقط ينشئ المستخدمين (عبر Edge Function بمفتاح خادم)
+jwt_expiry = 3600
